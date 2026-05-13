@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+#Requires -Version 7.0
 
 #region Constants
 $script:PROFILES_BASE = Join-Path $HOME ".claude-profiles"
@@ -63,9 +63,7 @@ function Write-Registry([PSCustomObject]$reg) {
 
 function Read-ActiveProfile {
     if (-not (Test-Path $script:ACTIVE_FILE)) { return '' }
-    $val = Get-Content $script:ACTIVE_FILE -Encoding UTF8 -Raw
-    if ($null -eq $val) { return '' }
-    return $val.Trim()
+    return ((Get-Content $script:ACTIVE_FILE -Encoding UTF8 -Raw)?.Trim() ?? '')
 }
 
 function Write-ActiveProfile([string]$name) {
@@ -193,9 +191,9 @@ function Command-List([string[]]$cmdArgs) {
     }
 
     foreach ($p in $profiles) {
-        $marker = if ($p.Name -eq $active) { '*' } else { ' ' }
-        $type = $p.Value.type
-        $urlSuffix = if ($p.Value.base_url) { " [url: $($p.Value.base_url)]" } else { '' }
+        $marker    = $p.Name -eq $active ? '*' : ' '
+        $type      = $p.Value.type
+        $urlSuffix = $p.Value.base_url ? " [url: $($p.Value.base_url)]" : ''
         Write-Host "$marker $($p.Name) [$type]$urlSuffix"
     }
 }

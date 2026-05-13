@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+#Requires -Version 7.0
 
 $ErrorActionPreference = 'Stop'
 
@@ -192,7 +192,7 @@ try {
     }
 
     Write-Host ""
-    $color = if ($script:failed -eq 0) { 'Green' } else { 'Red' }
+    $color = $script:failed -eq 0 ? 'Green' : 'Red'
     Write-Host "Risultati: $script:passed PASS, $script:failed FAIL su $($script:passed + $script:failed) test totali" -ForegroundColor $color
 
     if ($script:failed -gt 0) { exit 1 }
