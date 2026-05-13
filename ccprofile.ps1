@@ -761,7 +761,7 @@ DIRECTORY:
 function Invoke-Ccprofile([string[]]$cmdArgs) {
     Initialize-Dirs
 
-    if ($cmdArgs.Count -eq 0) {
+    if ($cmdArgs.Count -eq 0 -or $cmdArgs[0] -in @('-h', '--help')) {
         Command-Help @()
         return
     }
