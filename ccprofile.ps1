@@ -7,6 +7,7 @@ $script:BIN_DIR       = Join-Path $script:PROFILES_BASE "bin"
 $script:REGISTRY_FILE = Join-Path $script:PROFILES_BASE "profiles.json"
 $script:ACTIVE_FILE   = Join-Path $script:PROFILES_BASE "active"
 $script:CLAUDE_DIR    = Join-Path $HOME ".claude"
+$script:CLAUDE_JSON   = Join-Path $HOME ".claude.json"
 $script:BACKUP_DIR    = Join-Path $script:CLAUDE_DIR ".ccprofile-backup"
 $script:MANAGED_FILES = @(".credentials.json", "settings.json")
 #endregion
@@ -73,6 +74,45 @@ function Write-ActiveProfile([string]$name) {
 function Get-ProfileDir([string]$name) {
     return Join-Path $script:PROFILES_DIR $name
 }
+
+function Read-ClaudeJson {
+    if (-not (Test-Path $script:CLAUDE_JSON)) { return $null }
+    return Get-Content $script:CLAUDE_JSON -Encoding UTF8 -Raw | ConvertFrom-Json
+}
+
+function Write-ClaudeJson([PSCustomObject]$data) {
+    $data | ConvertTo-Json -Depth 50 | Set-Content $script:CLAUDE_JSON -Encoding UTF8
+}
+
+function Save-OAuthAccount([string]$name, [string]$profileType = '') {
+    if ([string]::IsNullOrEmpty($profileType)) {
+        $reg = Read-Registry
+        if ($null -eq $reg.PSObject.Properties[$name]) { return }
+        $profileType = $reg.PSObject.Properties[$name].Value.type
+    }
+    if ($profileType -ne 'pro') { return }
+    $claudeData = Read-ClaudeJson
+    if ($null -eq $claudeData -or $null -eq $claudeData.oauthAccount) { return }
+    $claudeData.oauthAccount | ConvertTo-Json -Depth 10 |
+        Set-Content (Join-Path (Get-ProfileDir $name) "oauth-account.json") -Encoding UTF8
+}
+
+function Apply-OAuthAccount([string]$name) {
+    $claudeData = Read-ClaudeJson
+    if ($null -eq $claudeData) { return }
+    $oauthPath = Join-Path (Get-ProfileDir $name) "oauth-account.json"
+    if (Test-Path $oauthPath) {
+        $newValue = Get-Content $oauthPath -Encoding UTF8 -Raw | ConvertFrom-Json
+        if ($null -ne $claudeData.PSObject.Properties['oauthAccount']) {
+            $claudeData.oauthAccount = $newValue
+        } else {
+            $claudeData | Add-Member -NotePropertyName 'oauthAccount' -NotePropertyValue $newValue
+        }
+    } else {
+        $claudeData.PSObject.Properties.Remove('oauthAccount')
+    }
+    Write-ClaudeJson $claudeData
+}
 #endregion
 
 #region File Swap
@@ -87,6 +127,7 @@ function Save-CurrentFiles([string]$name) {
             Copy-Item $src $profileDir -Force
         }
     }
+    Save-OAuthAccount $name
 }
 
 function Apply-ProfileFiles([string]$name) {
@@ -100,6 +141,7 @@ function Apply-ProfileFiles([string]$name) {
             Remove-Item $dst -Force
         }
     }
+    Apply-OAuthAccount $name
 }
 
 function Apply-ProfileFiles-Safe([string]$name) {
@@ -114,6 +156,9 @@ function Apply-ProfileFiles-Safe([string]$name) {
             Copy-Item $src $script:BACKUP_DIR -Force
         }
     }
+    if (Test-Path $script:CLAUDE_JSON) {
+        Copy-Item $script:CLAUDE_JSON (Join-Path $script:BACKUP_DIR ".claude.json") -Force
+    }
 
     try {
         Apply-ProfileFiles $name
@@ -127,6 +172,8 @@ function Apply-ProfileFiles-Safe([string]$name) {
                 Copy-Item $bak $dst -Force
             }
         }
+        $bakJson = Join-Path $script:BACKUP_DIR ".claude.json"
+        if (Test-Path $bakJson) { Copy-Item $bakJson $script:CLAUDE_JSON -Force }
         Remove-Item $script:BACKUP_DIR -Recurse -Force
         throw
     }
@@ -319,6 +366,10 @@ function Command-Add([string[]]$cmdArgs) {
 
     $reg | Add-Member -NotePropertyName $name -NotePropertyValue $entry
     Write-Registry $reg
+
+    if ($type -eq 'pro') {
+        Save-OAuthAccount $name $type
+    }
 
     Write-Ok "Profilo '$name' ($type) creato."
 }

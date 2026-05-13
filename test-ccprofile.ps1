@@ -184,6 +184,34 @@ try {
         }
     }
 
+    Invoke-Test "13. switch a apikey rimuove oauthAccount da .claude.json" {
+        $claudeJsonPath = Join-Path $testRoot ".claude.json"
+        $mockOAuth = [PSCustomObject]@{ accountUuid = "test-uuid"; emailAddress = "test@example.com" }
+        [PSCustomObject]@{ oauthAccount = $mockOAuth } | ConvertTo-Json -Depth 5 |
+            Set-Content $claudeJsonPath -Encoding UTF8
+
+        Command-Add @("testpro2", "--type", "pro")
+        Command-Use @("testpro2")
+        Command-Use @("testkey-renamed")
+
+        $claudeData = Get-Content $claudeJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($null -ne $claudeData.oauthAccount) {
+            throw "oauthAccount non rimossa dopo switch a apikey: $($claudeData.oauthAccount)"
+        }
+    }
+
+    Invoke-Test "14. switch a pro ripristina oauthAccount in .claude.json" {
+        $claudeJsonPath = Join-Path $testRoot ".claude.json"
+        Command-Use @("testpro2")
+        $claudeData = Get-Content $claudeJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($null -eq $claudeData.oauthAccount) {
+            throw "oauthAccount non ripristinata dopo switch a pro"
+        }
+        if ($claudeData.oauthAccount.emailAddress -ne "test@example.com") {
+            throw "oauthAccount.emailAddress = '$($claudeData.oauthAccount.emailAddress)'"
+        }
+    }
+
 } finally {
     Set-Variable -Name HOME -Value $script:realHome -Scope Global -Force
 
