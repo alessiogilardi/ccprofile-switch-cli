@@ -61,3 +61,5 @@ if ($MyInvocation.InvocationName -ne '.') {
 The dispatcher does not run when the file is dot-sourced (used by `test-ccprofile.ps1`). Constants (`$script:PROFILES_BASE`, `$script:CLAUDE_JSON`, etc.) are computed at dot-source time using `$HOME`, so overriding `$HOME` before dot-sourcing redirects all I/O to a temp directory.
 
 **`?.` operator gotcha:** PS7's null-conditional `?.` does not traverse the PowerShell Extended Type System — it cannot see NoteProperties added by `ConvertFrom-Json` or `Add-Member`. Use explicit null checks (`$null -eq $obj -or $null -eq $obj.prop`) for PSCustomObject properties.
+
+**`ConvertFrom-Json` empty-string key gotcha:** Claude Code writes `~/.claude.json` with properties whose name is `""` (e.g. `clientDataCache.cedar_lagoon: {"": true}`). `ConvertFrom-Json` without `-AsHashTable` throws on these. `Read-ClaudeJson` therefore uses `-AsHashTable` and returns `[hashtable]`; callers use `$h['key']` / `$h.Remove('key')` / `$h.ContainsKey('key')` instead of `.PSObject.Properties`. Do NOT switch `Read-ClaudeJson` back to bare `ConvertFrom-Json`.
