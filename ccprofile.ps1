@@ -77,10 +77,12 @@ function Get-ProfileDir([string]$name) {
 
 function Read-ClaudeJson {
     if (-not (Test-Path $script:CLAUDE_JSON)) { return $null }
-    return Get-Content $script:CLAUDE_JSON -Encoding UTF8 -Raw | ConvertFrom-Json
+    # -AsHashTable required: Claude Code writes empty-string keys (e.g. clientDataCache)
+    # that ConvertFrom-Json cannot deserialize into PSCustomObject
+    return Get-Content $script:CLAUDE_JSON -Encoding UTF8 -Raw | ConvertFrom-Json -AsHashTable
 }
 
-function Write-ClaudeJson([PSCustomObject]$data) {
+function Write-ClaudeJson([object]$data) {
     $data | ConvertTo-Json -Depth 50 | Set-Content $script:CLAUDE_JSON -Encoding UTF8
 }
 
@@ -102,14 +104,10 @@ function Apply-OAuthAccount([string]$name) {
     if ($null -eq $claudeData) { return }
     $oauthPath = Join-Path (Get-ProfileDir $name) "oauth-account.json"
     if (Test-Path $oauthPath) {
-        $newValue = Get-Content $oauthPath -Encoding UTF8 -Raw | ConvertFrom-Json
-        if ($null -ne $claudeData.PSObject.Properties['oauthAccount']) {
-            $claudeData.oauthAccount = $newValue
-        } else {
-            $claudeData | Add-Member -NotePropertyName 'oauthAccount' -NotePropertyValue $newValue
-        }
+        $newValue = Get-Content $oauthPath -Encoding UTF8 -Raw | ConvertFrom-Json -AsHashTable
+        $claudeData['oauthAccount'] = $newValue
     } else {
-        $claudeData.PSObject.Properties.Remove('oauthAccount')
+        $claudeData.Remove('oauthAccount')
     }
     Write-ClaudeJson $claudeData
 }
