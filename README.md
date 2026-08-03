@@ -125,4 +125,4 @@ The alias-to-profile mapping is also tracked in `~/.claude-profiles/aliases.json
 pwsh -File test-ccprofile.ps1
 ```
 
-24 end-to-end tests run in an isolated temp directory (overrides `$HOME` and `$PROFILE`).
+25 end-to-end tests run in an isolated temp directory (overrides `$HOME` and `$PROFILE`).

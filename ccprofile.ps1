@@ -338,20 +338,23 @@ function Command-Use([string[]]$cmdArgs) {
         return
     }
 
-    $active = Read-ActiveProfile
-    if ($active -eq $name) {
+    $active        = Read-ActiveProfile
+    $alreadyActive = ($active -eq $name)
+
+    if ($alreadyActive) {
         Write-Host "Profilo '$name' gia' attivo."
-        if ($start) { Start-Claude }
-        return
+    } else {
+        if (-not [string]::IsNullOrWhiteSpace($active)) {
+            Save-CurrentFiles $active
+        }
+
+        Apply-ProfileFiles-Safe $name
+        Write-ActiveProfile $name
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($active)) {
-        Save-CurrentFiles $active
-    }
-
-    Apply-ProfileFiles-Safe $name
-    Write-ActiveProfile $name
-
+    # Riapplica sempre le env var, anche se il profilo era gia' attivo: il processo
+    # corrente puo' avere un ANTHROPIC_API_KEY residuo (es. ereditato da un processo
+    # padre) che il file 'active' non riflette.
     $profile = $reg.PSObject.Properties[$name].Value
 
     if ($profile.type -eq 'apikey') {
@@ -366,7 +369,9 @@ function Command-Use([string[]]$cmdArgs) {
         Clear-EnvBaseUrl
     }
 
-    Write-Ok "Profilo '$name' attivato."
+    if (-not $alreadyActive) {
+        Write-Ok "Profilo '$name' attivato."
+    }
 
     if ($start) { Start-Claude }
 }

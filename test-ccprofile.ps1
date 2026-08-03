@@ -244,7 +244,22 @@ try {
         }
     }
 
-    Invoke-Test "17. alias add con nome di default (= nome profilo)" {
+    Invoke-Test "17. use su profilo gia' attivo riconcilia comunque le env var" {
+        Command-Use @("testpro2")
+        if ((Read-ActiveProfile) -ne "testpro2") { throw "Precondizione non soddisfatta: attivo != testpro2" }
+
+        # Simula un ANTHROPIC_API_KEY residuo ereditato da un processo padre,
+        # indipendente da cio' che 'active' registra
+        $env:ANTHROPIC_API_KEY = "sk-ant-stale-leftover-from-parent-process"
+
+        Command-Use @("testpro2")
+
+        if (-not [string]::IsNullOrEmpty($env:ANTHROPIC_API_KEY)) {
+            throw "ANTHROPIC_API_KEY residuo non ripulito su profilo gia' attivo: '$env:ANTHROPIC_API_KEY'"
+        }
+    }
+
+    Invoke-Test "18. alias add con nome di default (= nome profilo)" {
         Command-AliasAdd @("testkey-renamed")
 
         $aliases = Read-Aliases
@@ -261,7 +276,7 @@ try {
         }
     }
 
-    Invoke-Test "18. alias add con nome personalizzato (--as)" {
+    Invoke-Test "19. alias add con nome personalizzato (--as)" {
         Command-AliasAdd @("testpro2", "--as", "claude-work")
 
         $aliases = Read-Aliases
@@ -275,13 +290,13 @@ try {
         }
     }
 
-    Invoke-Test "19. alias-list elenca gli alias configurati" {
+    Invoke-Test "20. alias-list elenca gli alias configurati" {
         $out = & { Command-AliasList @() } 6>&1 | Out-String
         if ($out -notmatch 'testkey-renamed -> testkey-renamed') { throw "Output non contiene l'alias 'testkey-renamed': $out" }
         if ($out -notmatch 'claude-work -> testpro2') { throw "Output non contiene l'alias 'claude-work': $out" }
     }
 
-    Invoke-Test "20. alias add su nome gia' in uso da un altro profilo fallisce" {
+    Invoke-Test "21. alias add su nome gia' in uso da un altro profilo fallisce" {
         $before = Read-Aliases
         # Write-Err + return: non lancia eccezione
         Command-AliasAdd @("testkey-renamed", "--as", "claude-work")
@@ -289,7 +304,7 @@ try {
         if ($after['claude-work'] -ne $before['claude-work']) { throw "aliases.json modificato nonostante l'errore" }
     }
 
-    Invoke-Test "21. alias remove rimuove l'alias" {
+    Invoke-Test "22. alias remove rimuove l'alias" {
         Command-AliasRemove @("claude-work")
 
         $aliases = Read-Aliases
@@ -304,7 +319,7 @@ try {
         }
     }
 
-    Invoke-Test "22. alias remove su alias inesistente non modifica lo stato" {
+    Invoke-Test "23. alias remove su alias inesistente non modifica lo stato" {
         $keysBefore = (Read-Aliases).Keys | Sort-Object
         # Write-Err + return: non lancia eccezione
         Command-AliasRemove @("non-esiste")
@@ -314,7 +329,7 @@ try {
         }
     }
 
-    Invoke-Test "23. dispatcher 'ccprofile alias' instrada add/list/remove" {
+    Invoke-Test "24. dispatcher 'ccprofile alias' instrada add/list/remove" {
         Command-Alias @("add", "testpro2", "--as", "claude-dispatch")
         $aliases = Read-Aliases
         if ($aliases['claude-dispatch'] -ne 'testpro2') { throw "'alias add' via dispatcher non ha creato l'alias" }
@@ -327,7 +342,7 @@ try {
         if ($aliases.ContainsKey('claude-dispatch')) { throw "'alias remove' via dispatcher non ha rimosso l'alias" }
     }
 
-    Invoke-Test "24. dispatcher 'ccprofile alias' con sottocomando sconosciuto non lancia eccezione" {
+    Invoke-Test "25. dispatcher 'ccprofile alias' con sottocomando sconosciuto non lancia eccezione" {
         # Write-Err + return: non lancia eccezione
         Command-Alias @("bogus")
     }
