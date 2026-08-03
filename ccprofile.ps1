@@ -371,13 +371,13 @@ function Command-Use([string[]]$cmdArgs) {
     if ($start) { Start-Claude }
 }
 
-function Command-Alias([string[]]$cmdArgs) {
+function Command-AliasAdd([string[]]$cmdArgs) {
     $parsed      = Parse-Args $cmdArgs
     $profileName = $parsed['_positional'][0]
     $aliasName   = $parsed['as']
 
     if ([string]::IsNullOrWhiteSpace($profileName)) {
-        Write-Err "Nome profilo mancante. Uso: ccprofile alias <profilo> [--as <nome-alias>]"
+        Write-Err "Nome profilo mancante. Uso: ccprofile alias add <profilo> [--as <nome-alias>]"
         return
     }
 
@@ -397,7 +397,7 @@ function Command-Alias([string[]]$cmdArgs) {
 
     $aliases = Read-Aliases
     if ($aliases.ContainsKey($aliasName) -and $aliases[$aliasName] -ne $profileName) {
-        Write-Err "L'alias '$aliasName' e' gia' associato al profilo '$($aliases[$aliasName])'. Rimuovilo prima con: ccprofile alias-remove $aliasName"
+        Write-Err "L'alias '$aliasName' e' gia' associato al profilo '$($aliases[$aliasName])'. Rimuovilo prima con: ccprofile alias remove $aliasName"
         return
     }
 
@@ -412,7 +412,7 @@ function Command-Alias([string[]]$cmdArgs) {
 function Command-AliasList([string[]]$cmdArgs) {
     $aliases = Read-Aliases
     if ($aliases.Count -eq 0) {
-        Write-Host "Nessun alias configurato. Usa 'ccprofile alias <profilo>' per crearne uno."
+        Write-Host "Nessun alias configurato. Usa 'ccprofile alias add <profilo>' per crearne uno."
         return
     }
     foreach ($key in ($aliases.Keys | Sort-Object)) {
@@ -425,7 +425,7 @@ function Command-AliasRemove([string[]]$cmdArgs) {
     $aliasName = $parsed['_positional'][0]
 
     if ([string]::IsNullOrWhiteSpace($aliasName)) {
-        Write-Err "Nome alias mancante. Uso: ccprofile alias-remove <nome-alias>"
+        Write-Err "Nome alias mancante. Uso: ccprofile alias remove <nome-alias>"
         return
     }
 
@@ -441,6 +441,23 @@ function Command-AliasRemove([string[]]$cmdArgs) {
 
     Write-Ok "Alias '$aliasName' rimosso."
     Write-Host "Riavvia PowerShell oppure esegui: . `"$PROFILE`""
+}
+
+function Command-Alias([string[]]$cmdArgs) {
+    if ($cmdArgs.Count -eq 0) {
+        Write-Err "Sottocomando mancante. Uso: ccprofile alias add|list|remove ..."
+        return
+    }
+
+    $sub  = $cmdArgs[0]
+    $rest = if ($cmdArgs.Count -gt 1) { $cmdArgs[1..($cmdArgs.Count - 1)] } else { @() }
+
+    switch ($sub) {
+        "add"    { Command-AliasAdd $rest }
+        "list"   { Command-AliasList $rest }
+        "remove" { Command-AliasRemove $rest }
+        default  { Write-Err "Sottocomando alias sconosciuto: '$sub'. Usa 'ccprofile alias add|list|remove ...'." }
+    }
 }
 
 function Command-Add([string[]]$cmdArgs) {
@@ -932,10 +949,10 @@ ccprofile -- Gestore profili Claude Code
 COMANDI:
   list                                Elenca tutti i profili
   use <nome> [--start]                Attiva un profilo (e lancia claude con --start)
-  alias <nome> [--as <alias>]         Crea una funzione PowerShell per 'use <nome> --start'
+  alias add <nome> [--as <alias>]     Crea una funzione PowerShell per 'use <nome> --start'
                                        (alias di default = nome profilo)
-  alias-list                          Elenca gli alias configurati
-  alias-remove <alias>                Rimuove un alias
+  alias list                          Elenca gli alias configurati
+  alias remove <alias>                Rimuove un alias
   add <nome> --type pro|apikey        Crea un nuovo profilo
        [--key sk-ant-...]             API key (richiesta per tipo apikey)
        [--base-url <url>]             URL base personalizzato (es. Ollama)
@@ -980,8 +997,6 @@ function Invoke-Ccprofile([string[]]$cmdArgs) {
             "list"         { Command-List $rest }
             "use"          { Command-Use $rest }
             "alias"        { Command-Alias $rest }
-            "alias-list"   { Command-AliasList $rest }
-            "alias-remove" { Command-AliasRemove $rest }
             "add"          { Command-Add $rest }
             "delete"       { Command-Delete $rest }
             "current"      { Command-Current $rest }

@@ -37,8 +37,8 @@ Single-script CLI (`ccprofile.ps1`) with no external dependencies. All logic liv
 
 $PROFILE (PowerShell profile script)
 └── # BEGIN ccprofile-alias:<alias> / # END ccprofile-alias:<alias>  ← one marker block per alias,
-    injected/removed by `ccprofile alias` / `alias-remove` (mirrors the `ccprofile` function block
-    that install.ps1 injects). Each block defines `function <alias> { ccprofile use <name> --start }`.
+    injected/removed by `ccprofile alias add` / `ccprofile alias remove` (mirrors the `ccprofile`
+    function block that install.ps1 injects). Each block defines `function <alias> { ccprofile use <name> --start }`.
 
 ~/.claude/
 ├── settings.json              ← active profile's file (swapped on use)
@@ -57,7 +57,7 @@ $PROFILE (PowerShell profile script)
 - `Apply-ProfileFiles-Safe` wraps the file swap with backup/rollback in `~/.claude/.ccprofile-backup/`
 - When switching to `apikey`: `oauthAccount` removed from `~/.claude.json`; when switching to `pro`: restored from `profiles/<name>/oauth-account.json`
 - `ANTHROPIC_BASE_URL` is always set/cleared in sync with the active profile's `base_url` field
-- `aliases.json` and the `# BEGIN/END ccprofile-alias:<alias>` block in `$PROFILE` are kept in sync by `Command-Alias`/`Command-AliasRemove` — never edit one without the other
+- `aliases.json` and the `# BEGIN/END ccprofile-alias:<alias>` block in `$PROFILE` are kept in sync by `Command-AliasAdd`/`Command-AliasRemove` — never edit one without the other
 
 **Script guard for test isolation:**
 ```powershell

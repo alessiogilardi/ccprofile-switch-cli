@@ -244,8 +244,8 @@ try {
         }
     }
 
-    Invoke-Test "17. alias con nome di default (= nome profilo)" {
-        Command-Alias @("testkey-renamed")
+    Invoke-Test "17. alias add con nome di default (= nome profilo)" {
+        Command-AliasAdd @("testkey-renamed")
 
         $aliases = Read-Aliases
         if ($aliases['testkey-renamed'] -ne 'testkey-renamed') {
@@ -261,8 +261,8 @@ try {
         }
     }
 
-    Invoke-Test "18. alias con nome personalizzato (--as)" {
-        Command-Alias @("testpro2", "--as", "claude-work")
+    Invoke-Test "18. alias add con nome personalizzato (--as)" {
+        Command-AliasAdd @("testpro2", "--as", "claude-work")
 
         $aliases = Read-Aliases
         if ($aliases['claude-work'] -ne 'testpro2') {
@@ -281,15 +281,15 @@ try {
         if ($out -notmatch 'claude-work -> testpro2') { throw "Output non contiene l'alias 'claude-work': $out" }
     }
 
-    Invoke-Test "20. alias su nome gia' in uso da un altro profilo fallisce" {
+    Invoke-Test "20. alias add su nome gia' in uso da un altro profilo fallisce" {
         $before = Read-Aliases
         # Write-Err + return: non lancia eccezione
-        Command-Alias @("testkey-renamed", "--as", "claude-work")
+        Command-AliasAdd @("testkey-renamed", "--as", "claude-work")
         $after = Read-Aliases
         if ($after['claude-work'] -ne $before['claude-work']) { throw "aliases.json modificato nonostante l'errore" }
     }
 
-    Invoke-Test "21. alias-remove rimuove l'alias" {
+    Invoke-Test "21. alias remove rimuove l'alias" {
         Command-AliasRemove @("claude-work")
 
         $aliases = Read-Aliases
@@ -304,7 +304,7 @@ try {
         }
     }
 
-    Invoke-Test "22. alias-remove su alias inesistente non modifica lo stato" {
+    Invoke-Test "22. alias remove su alias inesistente non modifica lo stato" {
         $keysBefore = (Read-Aliases).Keys | Sort-Object
         # Write-Err + return: non lancia eccezione
         Command-AliasRemove @("non-esiste")
@@ -312,6 +312,24 @@ try {
         if (($keysBefore -join ',') -ne ($keysAfter -join ',')) {
             throw "aliases.json modificato nonostante l'errore"
         }
+    }
+
+    Invoke-Test "23. dispatcher 'ccprofile alias' instrada add/list/remove" {
+        Command-Alias @("add", "testpro2", "--as", "claude-dispatch")
+        $aliases = Read-Aliases
+        if ($aliases['claude-dispatch'] -ne 'testpro2') { throw "'alias add' via dispatcher non ha creato l'alias" }
+
+        $out = & { Command-Alias @("list") } 6>&1 | Out-String
+        if ($out -notmatch 'claude-dispatch -> testpro2') { throw "'alias list' via dispatcher non elenca l'alias: $out" }
+
+        Command-Alias @("remove", "claude-dispatch")
+        $aliases = Read-Aliases
+        if ($aliases.ContainsKey('claude-dispatch')) { throw "'alias remove' via dispatcher non ha rimosso l'alias" }
+    }
+
+    Invoke-Test "24. dispatcher 'ccprofile alias' con sottocomando sconosciuto non lancia eccezione" {
+        # Write-Err + return: non lancia eccezione
+        Command-Alias @("bogus")
     }
 
 } finally {
