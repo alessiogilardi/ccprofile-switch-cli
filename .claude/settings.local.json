@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:gist.github.com)",
+      "Bash(Get-Content *)",
+      "PowerShell(Get-Content *)",
+      "Bash(rtk ls *)",
+      "Bash(rtk diff *)"
+    ]
+  }
+}
