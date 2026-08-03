@@ -42,6 +42,9 @@ ccprofile <command> [arguments]
 |---------|-------------|
 | `list` | List all profiles (`*` marks the active one) |
 | `use <name> [--start]` | Switch to a profile (with `--start`, also launches `claude` afterwards) |
+| `alias <name> [--as <alias>]` | Create a PowerShell function that runs `use <name> --start` (alias defaults to the profile name) |
+| `alias-list` | List configured aliases |
+| `alias-remove <alias>` | Remove an alias |
 | `add <name> --type pro\|apikey [--key sk-ant-...] [--base-url <url>]` | Create a new profile |
 | `delete <name>` | Delete a profile (cannot delete the active profile) |
 | `current` | Print the active profile name |
@@ -73,6 +76,16 @@ ccprofile use work
 # Switch profiles and immediately launch claude
 ccprofile use work --start
 
+# Create a shortcut: typing "work" switches to the profile and launches claude
+ccprofile alias work
+
+# Create a shortcut with a custom name
+ccprofile alias personal --as claude-personal
+
+# List / remove shortcuts
+ccprofile alias-list
+ccprofile alias-remove claude-personal
+
 # Check what's active
 ccprofile status
 
@@ -94,10 +107,22 @@ ccprofile set-key work --key sk-ant-api03-...
 
 Profile files are stored under `~/.claude-profiles/profiles/<name>/`. The switch is atomic: a backup is taken before the swap and restored on failure.
 
+## Shell aliases
+
+`ccprofile alias <name>` injects a small PowerShell function into your `$PROFILE`, delimited by `# BEGIN ccprofile-alias:<alias>` / `# END` markers (same pattern the installer uses for the `ccprofile` function itself):
+
+```powershell
+# BEGIN ccprofile-alias:work
+function work { ccprofile use work --start }
+# END ccprofile-alias:work
+```
+
+The alias-to-profile mapping is also tracked in `~/.claude-profiles/aliases.json` so `alias-list`/`alias-remove` don't need to parse `$PROFILE`. Restart PowerShell (or run `. $PROFILE`) after creating or removing an alias.
+
 ## Running tests
 
 ```powershell
 pwsh -File test-ccprofile.ps1
 ```
 
-14 end-to-end tests run in an isolated temp directory (overrides `$HOME`).
+22 end-to-end tests run in an isolated temp directory (overrides `$HOME` and `$PROFILE`).

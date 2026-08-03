@@ -4,7 +4,8 @@ $ErrorActionPreference = 'Stop'
 
 $script:passed  = 0
 $script:failed  = 0
-$script:realHome = $HOME
+$script:realHome    = $HOME
+$script:realProfile = $PROFILE
 
 function Invoke-Test {
     param([string]$Name, [scriptblock]$Body)
@@ -24,6 +25,10 @@ New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 Write-Host "Test root: $testRoot" -ForegroundColor Cyan
 
 Set-Variable -Name HOME -Value $testRoot -Scope Global -Force
+
+# Isolamento: override $PROFILE per non toccare il profilo PowerShell reale
+# (i comandi alias-* lo leggono a runtime, non a dot-source time)
+Set-Variable -Name PROFILE -Value (Join-Path $testRoot "Microsoft.PowerShell_profile.ps1") -Scope Global -Force
 
 # Dot-source: costanti ricalcolate contro $testRoot, dispatcher non eseguito
 . "$PSScriptRoot\ccprofile.ps1"
@@ -239,8 +244,79 @@ try {
         }
     }
 
+    Invoke-Test "17. alias con nome di default (= nome profilo)" {
+        Command-Alias @("testkey-renamed")
+
+        $aliases = Read-Aliases
+        if ($aliases['testkey-renamed'] -ne 'testkey-renamed') {
+            throw "aliases.json non contiene 'testkey-renamed' -> 'testkey-renamed'"
+        }
+
+        $profileContent = Get-Content $PROFILE -Raw -Encoding UTF8
+        if ($profileContent -notmatch [regex]::Escape('# BEGIN ccprofile-alias:testkey-renamed')) {
+            throw "Blocco alias non trovato in `$PROFILE"
+        }
+        if ($profileContent -notmatch [regex]::Escape('function testkey-renamed { ccprofile use testkey-renamed --start }')) {
+            throw "Funzione alias con contenuto inatteso in `$PROFILE"
+        }
+    }
+
+    Invoke-Test "18. alias con nome personalizzato (--as)" {
+        Command-Alias @("testpro2", "--as", "claude-work")
+
+        $aliases = Read-Aliases
+        if ($aliases['claude-work'] -ne 'testpro2') {
+            throw "aliases.json non contiene 'claude-work' -> 'testpro2'"
+        }
+
+        $profileContent = Get-Content $PROFILE -Raw -Encoding UTF8
+        if ($profileContent -notmatch [regex]::Escape('function claude-work { ccprofile use testpro2 --start }')) {
+            throw "Funzione alias 'claude-work' non trovata in `$PROFILE"
+        }
+    }
+
+    Invoke-Test "19. alias-list elenca gli alias configurati" {
+        $out = & { Command-AliasList @() } 6>&1 | Out-String
+        if ($out -notmatch 'testkey-renamed -> testkey-renamed') { throw "Output non contiene l'alias 'testkey-renamed': $out" }
+        if ($out -notmatch 'claude-work -> testpro2') { throw "Output non contiene l'alias 'claude-work': $out" }
+    }
+
+    Invoke-Test "20. alias su nome gia' in uso da un altro profilo fallisce" {
+        $before = Read-Aliases
+        # Write-Err + return: non lancia eccezione
+        Command-Alias @("testkey-renamed", "--as", "claude-work")
+        $after = Read-Aliases
+        if ($after['claude-work'] -ne $before['claude-work']) { throw "aliases.json modificato nonostante l'errore" }
+    }
+
+    Invoke-Test "21. alias-remove rimuove l'alias" {
+        Command-AliasRemove @("claude-work")
+
+        $aliases = Read-Aliases
+        if ($aliases.ContainsKey('claude-work')) { throw "'claude-work' ancora in aliases.json" }
+
+        $profileContent = Get-Content $PROFILE -Raw -Encoding UTF8
+        if ($profileContent -match [regex]::Escape('ccprofile-alias:claude-work')) {
+            throw "Blocco alias 'claude-work' ancora presente in `$PROFILE"
+        }
+        if ($profileContent -notmatch [regex]::Escape('ccprofile-alias:testkey-renamed')) {
+            throw "Blocco alias 'testkey-renamed' rimosso per errore"
+        }
+    }
+
+    Invoke-Test "22. alias-remove su alias inesistente non modifica lo stato" {
+        $keysBefore = (Read-Aliases).Keys | Sort-Object
+        # Write-Err + return: non lancia eccezione
+        Command-AliasRemove @("non-esiste")
+        $keysAfter = (Read-Aliases).Keys | Sort-Object
+        if (($keysBefore -join ',') -ne ($keysAfter -join ',')) {
+            throw "aliases.json modificato nonostante l'errore"
+        }
+    }
+
 } finally {
     Set-Variable -Name HOME -Value $script:realHome -Scope Global -Force
+    Set-Variable -Name PROFILE -Value $script:realProfile -Scope Global -Force
 
     if (Test-Path $testRoot) {
         Remove-Item $testRoot -Recurse -Force -ErrorAction SilentlyContinue

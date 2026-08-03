@@ -5,6 +5,7 @@ $script:PROFILES_BASE = Join-Path $HOME ".claude-profiles"
 $script:PROFILES_DIR  = Join-Path $script:PROFILES_BASE "profiles"
 $script:BIN_DIR       = Join-Path $script:PROFILES_BASE "bin"
 $script:REGISTRY_FILE = Join-Path $script:PROFILES_BASE "profiles.json"
+$script:ALIASES_FILE  = Join-Path $script:PROFILES_BASE "aliases.json"
 $script:ACTIVE_FILE   = Join-Path $script:PROFILES_BASE "active"
 $script:CLAUDE_DIR    = Join-Path $HOME ".claude"
 $script:CLAUDE_JSON   = Join-Path $HOME ".claude.json"
@@ -36,6 +37,15 @@ function Assert-ProfileName([string]$name) {
 function Test-ApiKeyFormat([string]$key) {
     return $key -match '^sk-ant-[a-zA-Z0-9\-_]{20,}$'
 }
+
+function Assert-AliasName([string]$name) {
+    if ($name -notmatch '^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$') {
+        throw "Nome alias non valido: '$name'. Deve iniziare con una lettera o '_' e contenere solo lettere, numeri, - e _ (max 64 caratteri)"
+    }
+    if ($name -eq 'ccprofile') {
+        throw "Nome alias non valido: 'ccprofile' e' riservato."
+    }
+}
 #endregion
 
 #region Registry & State
@@ -47,6 +57,9 @@ function Initialize-Dirs {
     }
     if (-not (Test-Path $script:REGISTRY_FILE)) {
         Set-Content $script:REGISTRY_FILE -Value '{}' -Encoding UTF8
+    }
+    if (-not (Test-Path $script:ALIASES_FILE)) {
+        Set-Content $script:ALIASES_FILE -Value '{}' -Encoding UTF8
     }
     if (-not (Test-Path $script:ACTIVE_FILE)) {
         Set-Content $script:ACTIVE_FILE -Value '' -Encoding UTF8
@@ -60,6 +73,17 @@ function Read-Registry {
 
 function Write-Registry([PSCustomObject]$reg) {
     $reg | ConvertTo-Json -Depth 10 | Set-Content $script:REGISTRY_FILE -Encoding UTF8
+}
+
+function Read-Aliases {
+    if (-not (Test-Path $script:ALIASES_FILE)) { return @{} }
+    $content = Get-Content $script:ALIASES_FILE -Encoding UTF8 -Raw
+    if ([string]::IsNullOrWhiteSpace($content)) { return @{} }
+    return $content | ConvertFrom-Json -AsHashTable
+}
+
+function Write-Aliases([hashtable]$aliases) {
+    $aliases | ConvertTo-Json -Depth 5 | Set-Content $script:ALIASES_FILE -Encoding UTF8
 }
 
 function Read-ActiveProfile {
@@ -198,6 +222,51 @@ function Clear-EnvBaseUrl {
 }
 #endregion
 
+#region Shell Alias Management
+function Get-AliasMarkers([string]$aliasName) {
+    return @(
+        "# BEGIN ccprofile-alias:$aliasName",
+        "# END ccprofile-alias:$aliasName"
+    )
+}
+
+function Set-AliasFunctionInProfile([string]$aliasName, [string]$profileName) {
+    $profileDir = Split-Path $PROFILE -Parent
+    if (-not (Test-Path $profileDir)) {
+        New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
+    }
+    if (-not (Test-Path $PROFILE)) {
+        New-Item -ItemType File -Path $PROFILE -Force | Out-Null
+    }
+
+    $markers = Get-AliasMarkers $aliasName
+    $content = Get-Content $PROFILE -Raw -Encoding UTF8
+    if ($null -eq $content) { $content = '' }
+
+    $pattern = "(?s)\r?\n?$([regex]::Escape($markers[0])).*?$([regex]::Escape($markers[1]))\r?\n?"
+    $content = $content -replace $pattern, ''
+
+    $block = @"
+
+$($markers[0])
+function $aliasName { ccprofile use $profileName --start }
+$($markers[1])
+"@
+    Set-Content $PROFILE -Value ($content + $block) -Encoding UTF8
+}
+
+function Remove-AliasFunctionFromProfile([string]$aliasName) {
+    if (-not (Test-Path $PROFILE)) { return }
+    $markers = Get-AliasMarkers $aliasName
+    $content = Get-Content $PROFILE -Raw -Encoding UTF8
+    if ($null -eq $content -or $content -notmatch [regex]::Escape($markers[0])) { return }
+
+    $pattern = "(?s)\r?\n?$([regex]::Escape($markers[0])).*?$([regex]::Escape($markers[1]))\r?\n?"
+    $newContent = $content -replace $pattern, ''
+    Set-Content $PROFILE -Value $newContent -Encoding UTF8
+}
+#endregion
+
 #region Argument Parsing
 function Parse-Args([string[]]$cmdArgs) {
     $result = @{
@@ -300,6 +369,78 @@ function Command-Use([string[]]$cmdArgs) {
     Write-Ok "Profilo '$name' attivato."
 
     if ($start) { Start-Claude }
+}
+
+function Command-Alias([string[]]$cmdArgs) {
+    $parsed      = Parse-Args $cmdArgs
+    $profileName = $parsed['_positional'][0]
+    $aliasName   = $parsed['as']
+
+    if ([string]::IsNullOrWhiteSpace($profileName)) {
+        Write-Err "Nome profilo mancante. Uso: ccprofile alias <profilo> [--as <nome-alias>]"
+        return
+    }
+
+    Assert-ProfileName $profileName
+
+    $reg = Read-Registry
+    if ($null -eq $reg.PSObject.Properties[$profileName]) {
+        Write-Err "Profilo '$profileName' non trovato."
+        return
+    }
+
+    if ([string]::IsNullOrWhiteSpace($aliasName)) {
+        $aliasName = $profileName
+    }
+
+    Assert-AliasName $aliasName
+
+    $aliases = Read-Aliases
+    if ($aliases.ContainsKey($aliasName) -and $aliases[$aliasName] -ne $profileName) {
+        Write-Err "L'alias '$aliasName' e' gia' associato al profilo '$($aliases[$aliasName])'. Rimuovilo prima con: ccprofile alias-remove $aliasName"
+        return
+    }
+
+    Set-AliasFunctionInProfile $aliasName $profileName
+    $aliases[$aliasName] = $profileName
+    Write-Aliases $aliases
+
+    Write-Ok "Alias '$aliasName' creato per il profilo '$profileName'."
+    Write-Host "Riavvia PowerShell oppure esegui: . `"$PROFILE`""
+}
+
+function Command-AliasList([string[]]$cmdArgs) {
+    $aliases = Read-Aliases
+    if ($aliases.Count -eq 0) {
+        Write-Host "Nessun alias configurato. Usa 'ccprofile alias <profilo>' per crearne uno."
+        return
+    }
+    foreach ($key in ($aliases.Keys | Sort-Object)) {
+        Write-Host "$key -> $($aliases[$key])"
+    }
+}
+
+function Command-AliasRemove([string[]]$cmdArgs) {
+    $parsed    = Parse-Args $cmdArgs
+    $aliasName = $parsed['_positional'][0]
+
+    if ([string]::IsNullOrWhiteSpace($aliasName)) {
+        Write-Err "Nome alias mancante. Uso: ccprofile alias-remove <nome-alias>"
+        return
+    }
+
+    $aliases = Read-Aliases
+    if (-not $aliases.ContainsKey($aliasName)) {
+        Write-Err "Alias '$aliasName' non trovato."
+        return
+    }
+
+    Remove-AliasFunctionFromProfile $aliasName
+    $aliases.Remove($aliasName)
+    Write-Aliases $aliases
+
+    Write-Ok "Alias '$aliasName' rimosso."
+    Write-Host "Riavvia PowerShell oppure esegui: . `"$PROFILE`""
 }
 
 function Command-Add([string[]]$cmdArgs) {
@@ -791,6 +932,10 @@ ccprofile -- Gestore profili Claude Code
 COMANDI:
   list                                Elenca tutti i profili
   use <nome> [--start]                Attiva un profilo (e lancia claude con --start)
+  alias <nome> [--as <alias>]         Crea una funzione PowerShell per 'use <nome> --start'
+                                       (alias di default = nome profilo)
+  alias-list                          Elenca gli alias configurati
+  alias-remove <alias>                Rimuove un alias
   add <nome> --type pro|apikey        Crea un nuovo profilo
        [--key sk-ant-...]             API key (richiesta per tipo apikey)
        [--base-url <url>]             URL base personalizzato (es. Ollama)
@@ -832,19 +977,22 @@ function Invoke-Ccprofile([string[]]$cmdArgs) {
 
     try {
         switch ($cmd) {
-            "list"    { Command-List $rest }
-            "use"     { Command-Use $rest }
-            "add"     { Command-Add $rest }
-            "delete"  { Command-Delete $rest }
-            "current" { Command-Current $rest }
-            "status"  { Command-Status $rest }
-            "rename"  { Command-Rename $rest }
-            "edit"    { Command-Edit $rest }
-            "export"  { Command-Export $rest }
-            "import"  { Command-Import $rest }
-            "set-key" { Command-SetKey $rest }
-            "set-url" { Command-SetUrl $rest }
-            "help"    { Command-Help $rest }
+            "list"         { Command-List $rest }
+            "use"          { Command-Use $rest }
+            "alias"        { Command-Alias $rest }
+            "alias-list"   { Command-AliasList $rest }
+            "alias-remove" { Command-AliasRemove $rest }
+            "add"          { Command-Add $rest }
+            "delete"       { Command-Delete $rest }
+            "current"      { Command-Current $rest }
+            "status"       { Command-Status $rest }
+            "rename"       { Command-Rename $rest }
+            "edit"         { Command-Edit $rest }
+            "export"       { Command-Export $rest }
+            "import"       { Command-Import $rest }
+            "set-key"      { Command-SetKey $rest }
+            "set-url"      { Command-SetUrl $rest }
+            "help"         { Command-Help $rest }
             default   {
                 Write-Err "Comando sconosciuto: '$cmd'. Usa 'ccprofile help'."
                 exit 1
