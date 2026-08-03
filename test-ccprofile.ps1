@@ -212,6 +212,33 @@ try {
         }
     }
 
+    Invoke-Test "15. use --start lancia claude dopo lo switch" {
+        if ((Read-ActiveProfile) -ne "testpro2") { throw "Precondizione non soddisfatta: attivo != testpro2" }
+
+        $script:startCallCount = 0
+        function Start-Claude { $script:startCallCount++ }
+
+        Command-Use @("testkey-renamed", "--start")
+        if ($script:startCallCount -ne 1) {
+            throw "Start-Claude non invocata dopo switch (count=$script:startCallCount)"
+        }
+        if ((Read-ActiveProfile) -ne "testkey-renamed") {
+            throw "Switch non avvenuto: attivo = '$(Read-ActiveProfile)'"
+        }
+    }
+
+    Invoke-Test "16. use --start su profilo gia' attivo lancia comunque claude" {
+        if ((Read-ActiveProfile) -ne "testkey-renamed") { throw "Precondizione non soddisfatta: attivo != testkey-renamed" }
+
+        $script:startCallCount = 0
+        function Start-Claude { $script:startCallCount++ }
+
+        Command-Use @("testkey-renamed", "--start")
+        if ($script:startCallCount -ne 1) {
+            throw "Start-Claude non invocata su profilo gia' attivo (count=$script:startCallCount)"
+        }
+    }
+
 } finally {
     Set-Variable -Name HOME -Value $script:realHome -Scope Global -Force
 

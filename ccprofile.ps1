@@ -243,12 +243,21 @@ function Command-List([string[]]$cmdArgs) {
     }
 }
 
+function Start-Claude {
+    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+        Write-Err "Comando 'claude' non trovato nel PATH."
+        return
+    }
+    & claude
+}
+
 function Command-Use([string[]]$cmdArgs) {
     $parsed = Parse-Args $cmdArgs
-    $name = $parsed['_positional'][0]
+    $name  = $parsed['_positional'][0]
+    $start = [bool]$parsed['start']
 
     if ([string]::IsNullOrWhiteSpace($name)) {
-        Write-Err "Nome profilo mancante. Uso: ccprofile use <nome>"
+        Write-Err "Nome profilo mancante. Uso: ccprofile use <nome> [--start]"
         return
     }
 
@@ -263,6 +272,7 @@ function Command-Use([string[]]$cmdArgs) {
     $active = Read-ActiveProfile
     if ($active -eq $name) {
         Write-Host "Profilo '$name' gia' attivo."
+        if ($start) { Start-Claude }
         return
     }
 
@@ -288,6 +298,8 @@ function Command-Use([string[]]$cmdArgs) {
     }
 
     Write-Ok "Profilo '$name' attivato."
+
+    if ($start) { Start-Claude }
 }
 
 function Command-Add([string[]]$cmdArgs) {
@@ -778,7 +790,7 @@ ccprofile -- Gestore profili Claude Code
 
 COMANDI:
   list                                Elenca tutti i profili
-  use <nome>                          Attiva un profilo
+  use <nome> [--start]                Attiva un profilo (e lancia claude con --start)
   add <nome> --type pro|apikey        Crea un nuovo profilo
        [--key sk-ant-...]             API key (richiesta per tipo apikey)
        [--base-url <url>]             URL base personalizzato (es. Ollama)

@@ -41,7 +41,7 @@ ccprofile <command> [arguments]
 | Command | Description |
 |---------|-------------|
 | `list` | List all profiles (`*` marks the active one) |
-| `use <name>` | Switch to a profile |
+| `use <name> [--start]` | Switch to a profile (with `--start`, also launches `claude` afterwards) |
 | `add <name> --type pro\|apikey [--key sk-ant-...] [--base-url <url>]` | Create a new profile |
 | `delete <name>` | Delete a profile (cannot delete the active profile) |
 | `current` | Print the active profile name |
@@ -69,6 +69,9 @@ ccprofile add ollama --type apikey --key ollama --base-url http://localhost:1143
 
 # Switch profiles
 ccprofile use work
+
+# Switch profiles and immediately launch claude
+ccprofile use work --start
 
 # Check what's active
 ccprofile status
