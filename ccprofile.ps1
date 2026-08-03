@@ -183,7 +183,7 @@ function Set-EnvApiKey([string]$key) {
 }
 
 function Clear-EnvApiKey {
-    $env:ANTHROPIC_API_KEY = $null
+    Remove-Item Env:\ANTHROPIC_API_KEY -ErrorAction SilentlyContinue
     [System.Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", $null, "User")
 }
 
@@ -193,7 +193,7 @@ function Set-EnvBaseUrl([string]$url) {
 }
 
 function Clear-EnvBaseUrl {
-    $env:ANTHROPIC_BASE_URL = $null
+    Remove-Item Env:\ANTHROPIC_BASE_URL -ErrorAction SilentlyContinue
     [System.Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", $null, "User")
 }
 #endregion
