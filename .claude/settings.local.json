@@ -7,7 +7,8 @@
       "Bash(Get-Content *)",
       "PowerShell(Get-Content *)",
       "Bash(rtk ls *)",
-      "Bash(rtk diff *)"
+      "Bash(rtk diff *)",
+      "Bash(rtk grep *)"
     ]
   }
 }
